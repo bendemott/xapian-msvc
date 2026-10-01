@@ -1,3 +1,7 @@
-third_party/
-agent-tools/
-build/
+/build/
+/third_party/
+/agent-tools/
+/CMakeFiles/
+cmake-build-*/
+.vs/
+out/

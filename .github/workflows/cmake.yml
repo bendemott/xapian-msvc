@@ -1,0 +1,48 @@
+name: cmake
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: unix
+          - os: macos-latest
+            preset: unix
+          - os: windows-2022
+            preset: msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev uuid-dev
+
+      - name: Install macOS deps
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Import xapian-core sources
+        shell: bash
+        run: ./scripts/import-xapian-core.sh 2.1.0
+
+      - name: Configure (Unix)
+        if: matrix.preset == 'unix'
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Configure (MSVC)
+        if: matrix.preset == 'msvc'
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release -j 2
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
