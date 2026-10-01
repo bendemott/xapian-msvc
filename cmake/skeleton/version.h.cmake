@@ -40,14 +40,11 @@
 #cmakedefine XAPIAN_HAS_INMEMORY_BACKEND 1
 #cmakedefine XAPIAN_HAS_REMOTE_BACKEND 1
 
-/* DLL helpers for a CMake MSVC shared build (not in upstream visibility.h). */
-#if defined(_WIN32) && defined(XAPIAN_BUILD_DLL)
-# if defined(XAPIAN_LIB_BUILD)
-#  define XAPIAN_VISIBILITY_DEFAULT __declspec(dllexport)
-# else
-#  define XAPIAN_VISIBILITY_DEFAULT __declspec(dllimport)
-# endif
-# define XAPIAN_VISIBILITY_INTERNAL
-#endif
-
 #endif /* XAPIAN_INCLUDED_VERSION_H */
+
+/*
+ * DLL note: upstream include/xapian/visibility.h defines XAPIAN_VISIBILITY_*
+ * unconditionally (GCC attributes or empty). For MSVC DLLs, patch that header
+ * (or inject before it) so that on _WIN32 + XAPIAN_BUILD_DLL it uses
+ * __declspec(dllexport) while building the lib and dllimport for consumers.
+ */
