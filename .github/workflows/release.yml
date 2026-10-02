@@ -124,8 +124,8 @@ jobs:
             target_link_libraries(myapp PRIVATE Xapian::xapian)  # or Xapian::letor
             ```
 
-            You also need zlib for linking; the release zip bundles `zlibstatic.lib` + headers
-so `CMAKE_PREFIX_PATH` pointing at the unzipped tree is enough.
+            The release zip bundles `zlibstatic.lib` + headers, so a single
+            `CMAKE_PREFIX_PATH` pointing at the unzipped tree is enough.
           files: ${{ github.workspace }}/xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
