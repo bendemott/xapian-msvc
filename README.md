@@ -1,55 +1,71 @@
-# Xapian Core — CMake build (MSVC-friendly, cross-platform)
+# Xapian — CMake build (MSVC-friendly, cross-platform)
 
-CMake port of **xapian-core 2.1.0** that builds without MSYS2/autotools/MinGW.
-Verified on Linux; designed for MSVC (`Visual Studio 17 2022` / Ninja+cl) as well.
+CMake port of **Xapian 2.1.0** (core, omega, Python 3 bindings) that builds
+without MSYS2/autotools/MinGW. Verified on MSVC (Ninja+cl) and designed for
+Linux/macOS as well.
 
 ## Quick start
 
 ```bash
-# 1) Fetch upstream release sources (includes generated Snowball/Lemon files)
-./scripts/import-xapian-core.sh 2.1.0
+# Linux / macOS
+./build.sh import              # optional: third_party/{xapian-core,omega,bindings}
+./build.sh build test
+./build.sh build --python3 test
+```
 
-# 2) Configure & build (Ninja or Make)
+```powershell
+# Windows (PowerShell) — loads MSVC itself; no Developer Prompt required
+.\build.ps1 import
+.\build.ps1 build test
+.\build.ps1 build --python3 test
+```
+
+If `third_party/` trees are missing, CMake downloads the matching 2.1.0 tarballs
+automatically for each enabled module.
+
+### Manual cmake
+
+```bash
+python scripts/import-xapian.py   # optional; or: core omega bindings
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
+ctest --test-dir build --output-on-failure
 
-# 3) Smoke test
-./build/xapian-cmake-smoke
-# or: ctest --test-dir build --output-on-failure
+# Python 3 bindings (needs Python headers)
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DXAPIAN_BUILD_PYTHON3=ON
 ```
 
-### Windows (MSVC, no MinGW/MSYS2)
+zlib / PCRE2 are found via `find_package` or fetched automatically if missing.
 
-From a **Developer Command Prompt for VS** (or any shell where `cl` works).
-If `third_party/xapian-core` is missing, CMake downloads the 2.1.0 release automatically:
+## Modules
 
-```bat
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-```
+| Module | CMake option | Default | Notes |
+|--------|--------------|---------|-------|
+| **xapian-core** library | (always) | — | glass/honey/inmemory/remote backends |
+| Core CLI tools | `XAPIAN_BUILD_TOOLS` | ON | delve, compact, check, replicate, … |
+| **xapian-omega** | `XAPIAN_BUILD_OMEGA` | ON | omindex, scriptindex, omega CGI; PCRE2 fetched if needed; libmagic stub on MSVC |
+| **xapian-letor** | `XAPIAN_BUILD_LETOR` | ON | Learning-to-Rank library (from GitHub monorepo tag; no standalone tarball) |
+| **Python 3** bindings | `XAPIAN_BUILD_PYTHON3` | OFF | pre-generated SWIG wrap; stage into `build/*/python3/xapian/` |
 
-Or with Ninja after `vcvars64.bat`:
-
-```bat
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-zlib is found via `find_package(ZLIB)` or fetched automatically if missing.
+Smoke tests also cover dense-vector nearest-neighbour ranking via a cosine
+`PostingSource` (Xapian has no built-in ANN index). Other binding languages in
+the upstream tarball (Perl, Ruby, Java, …) are not wired yet — Python is first.
 
 ## What this repo provides
 
 | Path | Role |
 |------|------|
-| `CMakeLists.txt` | Real library build + smoke test |
-| `cmake/config.h.cmake` | Replaces autoconf `config.h` (includes MSVC large-file block) |
-| `cmake/version.h.in` | Public `xapian/version.h` |
-| `cmake/visibility.h` | GCC visibility **and** MSVC `__declspec` for DLLs |
-| `cmake/XapianFeatureChecks.cmake` | Feature probes |
-| `cmake/xapian_core_sources.cmake` | 239 translation units from upstream `lib_src` |
+| `build.ps1` / `build.sh` | Build + smoke-test helpers (Windows / Unix) |
+| `scripts/import-xapian.py` | Fetch official release tarballs into `third_party/` |
+| `CMakeLists.txt` | Library + optional modules |
+| `cmake/tools/` | Core CLI tools |
+| `cmake/omega/` | Omega programs + MSVC config / magic stub |
+| `cmake/letor/` | Learning-to-Rank library |
+| `cmake/bindings-python3/` | `_xapian` extension module |
+| `cmake/config.h.cmake` | Replaces autoconf `config.h` (MSVC large-file block) |
 | `examples/smoke_test.cpp` | Index + search smoke test |
-| `docs/investigation.md` | Background on why CMake vs autotools/MSYS |
+| `examples/vector_search_smoke.cpp` | Cosine vector nearest-neighbour smoke test |
+| `examples/letor_smoke.cpp` | FeatureList / LTR smoke test |
 
 ## Options
 
@@ -60,15 +76,71 @@ zlib is found via `find_package(ZLIB)` or fetched automatically if missing.
 | `XAPIAN_ENABLE_BACKEND_INMEMORY` | ON | Inmemory backend |
 | `XAPIAN_ENABLE_BACKEND_REMOTE` | ON | Remote / replication |
 | `XAPIAN_USE_ICU` | OFF | ICU word-breaking |
-| `BUILD_SHARED_LIBS` | OFF | Build DLL/so (uses `visibility.h` dllexport on Windows) |
-| `XAPIAN_BUILD_SMOKE_TEST` | ON | Build/run smoke executable |
+| `BUILD_SHARED_LIBS` | OFF | Build DLL/so |
+| `XAPIAN_BUILD_SMOKE_TEST` | ON | Library smoke executable |
+| `XAPIAN_BUILD_TOOLS` | ON | Core CLI tools |
+| `XAPIAN_BUILD_OMEGA` | ON | Omega programs |
+| `XAPIAN_BUILD_LETOR` | ON | Learning-to-Rank library |
+| `XAPIAN_BUILD_PYTHON3` | OFF | Python 3 bindings |
 
 ## Status
 
-- **Linux:** static `libxapian.a` builds; smoke test passes (glass DB index/search).
-- **MSVC:** build files and MSVC `config.h` bottom-matter are in place; CI workflow builds on `windows-2022`.
-- **Not yet:** full upstream testsuite under CTest, omega/bindings, maintainer Snowball regeneration.
+- **MSVC:** libxapian, core tools, omega, letor, vector-search smoke, and optional Python 3 bindings build; ctest smokes pass.
+- **Omega on Windows:** MIME sniffing uses an extension-based stub when libmagic is absent; optional external format filters are not required for the core programs.
+- **Easy upstream suite:** `XAPIAN_BUILD_TESTS=ON` runs none/inmemory/glass/honey + stem/internal/unit (a few MSVC-only SKIPs).
+- **Not yet:** full remote/replication/omega testsuite under CTest; non-Python bindings; maintainer Snowball regeneration.
+
+## Prebuilt Windows libraries
+
+GitHub Actions builds an **MSVC x64 static** package whenever:
+
+- you push a `v*.*.*` tag, or
+- you run **Actions → release → Run workflow** with a version, or
+- **watch-upstream** sees a new `vX.Y.Z` tag on [xapian/xapian](https://github.com/xapian/xapian) (and the oligarchy tarball exists)
+
+Download `xapian-msvc-<ver>-windows-x64.zip` from [Releases](https://github.com/bendemott/xapian-msvc/releases), unzip, then:
+
+```cmake
+list(APPEND CMAKE_PREFIX_PATH "C:/libs/xapian-msvc-2.1.0-windows-x64")
+find_package(Xapian 2.1.0 REQUIRED)
+target_link_libraries(myapp PRIVATE Xapian::xapian)   # and/or Xapian::letor
+```
+
+You still need zlib when building from source / vcpkg; the **release zip
+bundles** `zlibstatic.lib` + headers so a single `CMAKE_PREFIX_PATH` is enough.
+
+To publish the current tree as 2.1.0 once:
+
+```text
+Actions → release → Run workflow → version=2.1.0
+```
+
+## vcpkg
+
+This repo ships an overlay port named **`xapian-msvc`** (avoids clashing with the official autotools `xapian` 1.4.x port).
+
+```powershell
+# from a checkout of this repo
+vcpkg install xapian-msvc --overlay-ports="$PWD/ports"
+```
+
+```cmake
+find_package(Xapian CONFIG REQUIRED)
+target_link_libraries(myapp PRIVATE Xapian::xapian Xapian::letor)
+```
+
+Features: `letor` (default), `tools` (default), `omega` (optional, pulls `pcre2`).
+
+## Using the Python module
+
+After `build --python3`:
+
+```powershell
+$env:PYTHONPATH = "$PWD\build\release\python3"
+python -c "import xapian; print(xapian.version_string())"
+```
 
 ## License
 
-xapian-core is **GPL-2.0-or-later** (see `third_party/xapian-core/COPYING` after import). This CMake glue is provided under the same license terms when distributed with Xapian.
+Xapian is **GPL-2.0-or-later** (see `third_party/*/COPYING` after import). This
+CMake glue is provided under the same license terms when distributed with Xapian.

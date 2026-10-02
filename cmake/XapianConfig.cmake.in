@@ -1,0 +1,15 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(ZLIB)
+
+if(NOT TARGET Xapian::xapian)
+  include("${CMAKE_CURRENT_LIST_DIR}/XapianTargets.cmake")
+endif()
+
+# Convenience: Xapian::Xapian matches common find_package naming.
+if(TARGET Xapian::xapian AND NOT TARGET Xapian::Xapian)
+  add_library(Xapian::Xapian ALIAS Xapian::xapian)
+endif()
+
+check_required_components(Xapian)

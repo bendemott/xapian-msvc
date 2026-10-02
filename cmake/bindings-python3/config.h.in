@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Shadow config.h for the Python 3 SWIG wrap. xapian_wrap.cc includes
+ * <config.h> before <Python.h>. On MSVC our core config.h #defines pid_t /
+ * ssize_t / mode_t as macros, which then break pyconfig.h's typedefs
+ * (e.g. "typedef int pid_t" becomes "typedef int __int64"). Include the
+ * real config, then drop those macros before Python.h is parsed.
+ */
+#include "@XAPIAN_CORE_CONFIG_H@" /* absolute path to core build config.h */
+
+#ifdef _MSC_VER
+# undef pid_t
+# undef ssize_t
+# undef mode_t
+#endif

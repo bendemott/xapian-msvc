@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(xapian-core VERSION 2.1.0 LANGUAGES C CXX)
+
+# Allow CI/release builds to target a different upstream version without editing
+# this file: cmake -DXAPIAN_VERSION=2.1.0 ...
+set(XAPIAN_VERSION "2.1.0" CACHE STRING "Xapian release version to build/fetch")
+project(xapian VERSION ${XAPIAN_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,6 +16,11 @@ option(XAPIAN_ENABLE_BACKEND_INMEMORY "Enable inmemory backend" ON)
 option(XAPIAN_ENABLE_BACKEND_REMOTE "Enable remote backend" ON)
 option(XAPIAN_USE_ICU "Enable ICU word-breaking" OFF)
 option(XAPIAN_BUILD_SMOKE_TEST "Build smoke test executable" ON)
+option(XAPIAN_BUILD_TESTS "Build upstream xapian-core testsuite (local backends)" OFF)
+option(XAPIAN_BUILD_TOOLS "Build xapian-core CLI tools (delve, compact, …)" ON)
+option(XAPIAN_BUILD_OMEGA "Build xapian-omega (omindex, scriptindex, omega CGI)" ON)
+option(XAPIAN_BUILD_LETOR "Build xapian-letor (learning to rank)" ON)
+option(XAPIAN_BUILD_PYTHON3 "Build Python 3 bindings" OFF)
 option(XAPIAN_USE_VISIBILITY "Use ELF visibility attributes (GCC/Clang)" ON)
 
 # Prefer a local import; otherwise FetchContent the official release tarball.
@@ -22,15 +31,15 @@ if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/include/xapian.h")
   include(FetchContent)
   set(XAPIAN_FETCH_VERSION "${PROJECT_VERSION}")
   message(STATUS "xapian-core not at ${XAPIAN_SOURCE_ROOT}; downloading ${XAPIAN_FETCH_VERSION}")
+  # Official release tarball has no top-level CMakeLists.txt, so MakeAvailable
+  # only downloads/extracts (no add_subdirectory). Prefer it over the deprecated
+  # FetchContent_Populate(declared-details) form (CMP0169).
   FetchContent_Declare(
     xapian_core_src
     URL "https://oligarchy.co.uk/xapian/${XAPIAN_FETCH_VERSION}/xapian-core-${XAPIAN_FETCH_VERSION}.tar.xz"
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
-  FetchContent_GetProperties(xapian_core_src)
-  if(NOT xapian_core_src_POPULATED)
-    FetchContent_Populate(xapian_core_src)
-  endif()
+  FetchContent_MakeAvailable(xapian_core_src)
   set(XAPIAN_SOURCE_ROOT "${xapian_core_src_SOURCE_DIR}" CACHE PATH "Path to xapian-core sources" FORCE)
 endif()
 
@@ -49,9 +58,33 @@ if(NOT ZLIB_FOUND)
   )
   set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(zlib)
-  if(NOT TARGET ZLIB::ZLIB)
-    add_library(ZLIB::ZLIB ALIAS zlib)
+  # zlib's CMake always adds a SHARED `zlib` target (DLL) alongside `zlibstatic`.
+  # Keep the subdirectory out of the default `all` build so we only compile the
+  # static lib we link; that avoids shipping/needing zlib.dll next to apps.
+  if(DEFINED zlib_SOURCE_DIR)
+    set_property(DIRECTORY "${zlib_SOURCE_DIR}" PROPERTY EXCLUDE_FROM_ALL TRUE)
   endif()
+  if(TARGET zlib)
+    # If anything still builds the DLL, drop it next to our binaries.
+    set_target_properties(zlib PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}")
+  endif()
+  if(TARGET zlibstatic)
+    set(XAPIAN_ZLIB_TARGET zlibstatic)
+  elseif(TARGET ZLIB::ZLIB)
+    set(XAPIAN_ZLIB_TARGET ZLIB::ZLIB)
+  elseif(TARGET zlib)
+    set(XAPIAN_ZLIB_TARGET zlib)
+  else()
+    message(FATAL_ERROR "FetchContent zlib produced no usable library target")
+  endif()
+  message(STATUS "Using FetchContent zlib target: ${XAPIAN_ZLIB_TARGET}")
+else()
+  set(XAPIAN_ZLIB_TARGET ZLIB::ZLIB)
 endif()
 if(XAPIAN_USE_ICU)
   find_package(ICU REQUIRED COMPONENTS uc i18n)
@@ -152,16 +185,25 @@ target_include_directories(xapian
     "${XAPIAN_SOURCE_ROOT}/include"
 )
 
-target_link_libraries(xapian PUBLIC ZLIB::ZLIB)
+# Build against whatever zlib we found. Use BUILD_INTERFACE so FetchContent
+# `zlibstatic` is not required by install(EXPORT). Consumers get ZLIB::ZLIB via
+# XapianConfig.cmake (find_dependency).
+target_link_libraries(xapian PRIVATE $<BUILD_INTERFACE:${XAPIAN_ZLIB_TARGET}>)
+target_link_libraries(xapian INTERFACE $<INSTALL_INTERFACE:ZLIB::ZLIB>)
 
 if(WIN32)
-  target_link_libraries(xapian PRIVATE ws2_32 rpcrt4)
+  target_link_libraries(xapian PRIVATE
+    $<BUILD_INTERFACE:ws2_32>
+    $<BUILD_INTERFACE:rpcrt4>)
+  target_link_libraries(xapian INTERFACE
+    $<INSTALL_INTERFACE:ws2_32>
+    $<INSTALL_INTERFACE:rpcrt4>)
 else()
   # UUID: prefer libuuid when uuid/uuid.h was found
   if(HAVE_UUID_UUID_H)
     find_library(UUID_LIBRARY uuid)
     if(UUID_LIBRARY)
-      target_link_libraries(xapian PRIVATE ${UUID_LIBRARY})
+      target_link_libraries(xapian PRIVATE $<BUILD_INTERFACE:${UUID_LIBRARY}>)
     endif()
   endif()
 endif()
@@ -176,6 +218,11 @@ endif()
 
 if(MSVC)
   target_compile_options(xapian PRIVATE /W3 /EHsc /bigobj)
+  # Public headers use XAPIAN_NONNULL() with an empty macro argument list.
+  # MSVC warns C4003; upstream disables that in config.h for the library build,
+  # but consumers (e.g. the smoke test) only see the public headers — so push
+  # the same suppression to anyone linking Xapian::xapian.
+  target_compile_options(xapian PUBLIC /wd4003)
 else()
   target_compile_options(xapian PRIVATE -Wall -Wno-unused)
 endif()
@@ -185,14 +232,44 @@ if(XAPIAN_BUILD_SMOKE_TEST)
   target_link_libraries(xapian-cmake-smoke PRIVATE Xapian::xapian)
   enable_testing()
   add_test(NAME smoke COMMAND xapian-cmake-smoke)
+
+  # Dense-vector nearest-neighbour pattern via a cosine PostingSource.
+  add_executable(xapian-vector-smoke examples/vector_search_smoke.cpp)
+  target_link_libraries(xapian-vector-smoke PRIVATE Xapian::xapian)
+  add_test(NAME vector-smoke COMMAND xapian-vector-smoke)
+endif()
+
+if(XAPIAN_BUILD_TOOLS)
+  add_subdirectory(cmake/tools)
+endif()
+
+if(XAPIAN_BUILD_OMEGA)
+  add_subdirectory(cmake/omega)
+endif()
+
+if(XAPIAN_BUILD_LETOR)
+  add_subdirectory(cmake/letor)
+endif()
+
+if(XAPIAN_BUILD_PYTHON3)
+  add_subdirectory(cmake/bindings-python3)
+endif()
+
+if(XAPIAN_BUILD_TESTS)
+  add_subdirectory(cmake/tests)
 endif()
 
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+set_target_properties(xapian PROPERTIES EXPORT_NAME xapian)
+
 install(TARGETS xapian
   EXPORT XapianTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY "${XAPIAN_SOURCE_ROOT}/include/xapian"
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.h"
@@ -205,3 +282,61 @@ install(FILES
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/xapian)
 install(FILES "${XAPIAN_SOURCE_ROOT}/include/xapian.h"
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# Package config lives under lib/cmake/Xapian so find_package(Xapian) works
+# from an install prefix or a prebuilt zip extracted anywhere.
+set(XAPIAN_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/Xapian")
+
+install(EXPORT XapianTargets
+  FILE XapianTargets.cmake
+  NAMESPACE Xapian::
+  DESTINATION ${XAPIAN_CMAKE_INSTALL_DIR})
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/XapianConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/XapianConfig.cmake"
+  INSTALL_DESTINATION ${XAPIAN_CMAKE_INSTALL_DIR})
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/XapianConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/XapianConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/XapianConfigVersion.cmake"
+  DESTINATION ${XAPIAN_CMAKE_INSTALL_DIR})
+
+# When zlib was fetched into the tree, also install it into the prefix so the
+# prebuilt zip is self-contained (find_package(ZLIB) via CMAKE_PREFIX_PATH).
+if(TARGET zlibstatic AND DEFINED zlib_SOURCE_DIR)
+  install(TARGETS zlibstatic
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(FILES
+    "${zlib_SOURCE_DIR}/zlib.h"
+    "${zlib_BINARY_DIR}/zconf.h"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  # Minimal config so find_dependency(ZLIB) succeeds against this prefix.
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/bundled-zlib-config.cmake"
+"# Generated by xapian-msvc for redistributable prefixes.
+if(NOT TARGET ZLIB::ZLIB)
+  add_library(ZLIB::ZLIB STATIC IMPORTED)
+  set_target_properties(ZLIB::ZLIB PROPERTIES
+    IMPORTED_LOCATION \"\${CMAKE_CURRENT_LIST_DIR}/../../zlibstatic.lib\"
+    INTERFACE_INCLUDE_DIRECTORIES \"\${CMAKE_CURRENT_LIST_DIR}/../../../include\")
+  if(EXISTS \"\${CMAKE_CURRENT_LIST_DIR}/../../zlib.lib\")
+    set_target_properties(ZLIB::ZLIB PROPERTIES
+      IMPORTED_LOCATION \"\${CMAKE_CURRENT_LIST_DIR}/../../zlib.lib\")
+  endif()
+endif()
+set(ZLIB_FOUND TRUE)
+set(ZLIB_INCLUDE_DIR \"\${CMAKE_CURRENT_LIST_DIR}/../../../include\" CACHE PATH \"\")
+get_target_property(_xapian_zlib_loc ZLIB::ZLIB IMPORTED_LOCATION)
+set(ZLIB_LIBRARY \"\${_xapian_zlib_loc}\" CACHE FILEPATH \"\")
+")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/bundled-zlib-config.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/ZLIB"
+    RENAME ZLIBConfig.cmake)
+endif()

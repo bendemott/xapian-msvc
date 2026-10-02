@@ -421,7 +421,7 @@
 #define VERSION "@VERSION@"
 
 /* Version of Windows to assume (0x600 => Vista). */
-#cmakedefine WINVER 1
+#cmakedefine WINVER @WINVER@
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -451,7 +451,7 @@
 #cmakedefine _LARGE_FILES 1
 
 /* Version of Windows to assume. */
-#cmakedefine _WIN32_WINNT 1
+#cmakedefine _WIN32_WINNT @_WIN32_WINNT@
 
 /* Define to `int' if <sys/types.h> does not define. */
 #cmakedefine mode_t @mode_t@
@@ -473,6 +473,9 @@
 # pragma warning(disable:4800)
 /* Character in string literal can't be represented in current code page. */
 # pragma warning(disable:4566)
+/* size_t / __int64 -> narrower integer (common in upstream sources). */
+# pragma warning(disable:4267)
+# pragma warning(disable:4244)
 
 /* POSIX get to deprecate POSIX things, not Microsoft. */
 # ifndef _CRT_NONSTDC_NO_WARNINGS
@@ -506,6 +509,11 @@
  * to ensure it always gets defined before zlib.h is included.
  */
 #define ZLIB_CONST
+
+/* Signal we're building the library (or in-tree tools) so it's OK to include
+ * headers such as xapian/error.h directly.
+ */
+#define XAPIAN_LIB_BUILD 1
 
 /* Make the POSIX-like functions support large files.  MSVC needs this;
  * current mingw32 does too; mingw64 supports _FILE_OFFSET_BITS, which

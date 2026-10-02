@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: watch-upstream
+
+# Poll the official GitHub mirror (xapian/xapian) for new version tags and
+# dispatch a matching MSVC release build. Upstream publishes tags (v2.1.0) but
+# not GitHub Releases, so we cannot subscribe to `release` events.
+
+on:
+  schedule:
+    # Twice daily UTC
+    - cron: "17 6,18 * * *"
+  workflow_dispatch:
+    inputs:
+      min_version:
+        description: "Ignore tags older than this (default 2.0.0)"
+        required: false
+        default: "2.0.0"
+        type: string
+      dry_run:
+        description: "Only report; do not dispatch release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find new upstream tags
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIN_VERSION: ${{ inputs.min_version || '2.0.0' }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          OUR_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          version_ge() {
+            # Return 0 if $1 >= $2 (numeric dotted triples only).
+            printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1 | grep -qx "$2"
+          }
+
+          echo "Minimum version: $MIN_VERSION"
+          mapfile -t UPSTREAM < <(
+            gh api --paginate repos/xapian/xapian/tags \
+              --jq '.[].name' \
+            | sed -n 's/^v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' \
+            | sort -Vu
+          )
+
+          mapfile -t OURS < <(
+            gh api --paginate "repos/${OUR_REPO}/releases" \
+              --jq '.[].tag_name' \
+            | sed -n 's/^v\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' \
+            | sort -Vu
+          )
+
+          echo "Upstream tags: ${#UPSTREAM[@]}"
+          echo "Our releases:  ${#OURS[@]}"
+
+          NEW=()
+          for v in "${UPSTREAM[@]}"; do
+            version_ge "$v" "$MIN_VERSION" || continue
+            skip=0
+            for o in "${OURS[@]:-}"; do
+              if [ "$o" = "$v" ]; then skip=1; break; fi
+            done
+            if [ "$skip" -eq 0 ]; then
+              NEW+=("$v")
+            fi
+          done
+
+          if [ "${#NEW[@]}" -eq 0 ]; then
+            echo "No new upstream versions to build."
+            echo "versions=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "New versions: ${NEW[*]}"
+          echo "versions=${NEW[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch release builds
+        if: steps.find.outputs.versions != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          VERSIONS: ${{ steps.find.outputs.versions }}
+          OUR_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for v in $VERSIONS; do
+            echo "==> Xapian $v"
+            # Confirm release tarball exists before spending a Windows runner.
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://oligarchy.co.uk/xapian/${v}/xapian-core-${v}.tar.xz")
+            if [ "$CODE" != "200" ]; then
+              echo "Skip $v: core tarball not published yet (HTTP $CODE)"
+              continue
+            fi
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "dry-run: would dispatch release.yml for $v"
+              continue
+            fi
+            gh workflow run release.yml \
+              --repo "$OUR_REPO" \
+              -f "version=$v" \
+              -f "create_release=true"
+            echo "Dispatched release.yml for $v"
+          done

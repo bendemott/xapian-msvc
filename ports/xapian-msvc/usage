@@ -1,0 +1,7 @@
+xapian-msvc provides CMake targets:
+
+    find_package(Xapian CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE Xapian::xapian)
+
+    # Optional Learning-to-Rank (feature "letor"):
+    target_link_libraries(main PRIVATE Xapian::letor)

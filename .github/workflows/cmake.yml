@@ -23,23 +23,31 @@ jobs:
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev uuid-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev uuid-dev python3-dev libpcre2-dev
 
       - name: Install macOS deps
         if: runner.os == 'macOS'
         run: brew install ninja
 
-      - name: Import xapian-core sources
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Import Xapian sources
         shell: bash
-        run: ./scripts/import-xapian-core.sh 2.1.0
+        run: |
+          if command -v python3 >/dev/null 2>&1; then PY=python3
+          elif command -v python >/dev/null 2>&1; then PY=python
+          else echo "Python 3 required"; exit 1; fi
+          "$PY" scripts/import-xapian.py --version 2.1.0
 
       - name: Configure (Unix)
         if: matrix.preset == 'unix'
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DXAPIAN_BUILD_PYTHON3=ON
 
       - name: Configure (MSVC)
         if: matrix.preset == 'msvc'
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DXAPIAN_BUILD_PYTHON3=ON
 
       - name: Build
         run: cmake --build build --config Release -j 2

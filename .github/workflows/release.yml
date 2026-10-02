@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+name: release
+
+# Build Windows MSVC prebuilts and publish a GitHub Release matching an upstream
+# Xapian version (e.g. 2.1.0 → tag/release v2.1.0).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Upstream Xapian version (e.g. 2.1.0)"
+        required: true
+        type: string
+      create_release:
+        description: "Create/update GitHub Release with artifacts"
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            V="${{ inputs.version }}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version: $V" >&2
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building Xapian $V"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Import Xapian sources
+        shell: bash
+        run: python scripts/import-xapian.py --version "${{ steps.ver.outputs.version }}"
+
+      - name: Configure (MSVC)
+        run: >
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          -DXAPIAN_VERSION=${{ steps.ver.outputs.version }}
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/prefix
+          -DBUILD_SHARED_LIBS=OFF
+          -DXAPIAN_BUILD_TOOLS=ON
+          -DXAPIAN_BUILD_LETOR=ON
+          -DXAPIAN_BUILD_OMEGA=OFF
+          -DXAPIAN_BUILD_PYTHON3=OFF
+          -DXAPIAN_BUILD_SMOKE_TEST=ON
+          -DXAPIAN_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release -j 2
+
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Install
+        run: cmake --install build --config Release
+
+      - name: Stage package
+        id: pkg
+        shell: bash
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          NAME="xapian-msvc-${V}-windows-x64"
+          STAGE="${{ github.workspace }}/stage/${NAME}"
+          mkdir -p "$STAGE"
+          cp -a "${{ github.workspace }}/prefix/." "$STAGE/"
+          # Drop smoke-test binaries from the redistributable package.
+          rm -f "$STAGE"/bin/xapian-*-smoke.exe 2>/dev/null || true
+          rm -f "$STAGE"/bin/xapian-cmake-smoke.exe 2>/dev/null || true
+          (
+            cd "${{ github.workspace }}/stage"
+            powershell -NoProfile -Command "Compress-Archive -Path '${NAME}' -DestinationPath '${{ github.workspace }}/${NAME}.zip' -Force"
+          )
+          echo "asset=${NAME}.zip" >> "$GITHUB_OUTPUT"
+          ls -la "${{ github.workspace }}/${NAME}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64
+          path: ${{ github.workspace }}/xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64.zip
+
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'push' || inputs.create_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Xapian ${{ steps.ver.outputs.version }} (MSVC Windows x64)
+          generate_release_notes: true
+          body: |
+            Prebuilt **MSVC / Windows x64** static libraries for [Xapian](https://xapian.org/) `${{ steps.ver.outputs.version }}`.
+
+            ### Contents
+            - `lib/xapian.lib`, `lib/xapianletor.lib`
+            - headers under `include/`
+            - CMake package: `lib/cmake/Xapian/` (`find_package(Xapian)`)
+            - core CLI tools under `bin/`
+
+            ### Use from CMake
+            ```cmake
+            list(APPEND CMAKE_PREFIX_PATH "C:/path/to/xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64")
+            find_package(Xapian ${{ steps.ver.outputs.version }} REQUIRED)
+            target_link_libraries(myapp PRIVATE Xapian::xapian)  # or Xapian::letor
+            ```
+
+            You also need zlib for linking; the release zip bundles `zlibstatic.lib` + headers
+so `CMAKE_PREFIX_PATH` pointing at the unzipped tree is enough.
+          files: ${{ github.workspace }}/xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

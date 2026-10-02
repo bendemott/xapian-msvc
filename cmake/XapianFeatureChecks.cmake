@@ -49,6 +49,35 @@ macro(xapian_detect_features)
   check_type_size("long" SIZEOF_LONG)
   check_type_size("long long" SIZEOF_LONG_LONG)
 
+  # AC_TYPE_MODE_T / AC_TYPE_SSIZE_T / AC_TYPE_PID_T — define replacements when
+  # the system headers omit them (MSVC). Used by safesysstat.h's mkdir(path, mode)
+  # overload and various POSIX-ish call sites.
+  set(CMAKE_EXTRA_INCLUDE_FILES "sys/types.h")
+  check_type_size("mode_t" SIZEOF_MODE_T)
+  check_type_size("ssize_t" SIZEOF_SSIZE_T)
+  check_type_size("pid_t" SIZEOF_PID_T)
+  set(CMAKE_EXTRA_INCLUDE_FILES)
+  if(NOT HAVE_SIZEOF_MODE_T)
+    set(mode_t "int")
+  endif()
+  if(NOT HAVE_SIZEOF_SSIZE_T)
+    set(ssize_t "int")
+  endif()
+  if(NOT HAVE_SIZEOF_PID_T)
+    # Match autoconf AC_TYPE_PID_T: __int64 on Win64, int elsewhere.
+    if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+      set(pid_t "__int64")
+    else()
+      set(pid_t "int")
+    endif()
+  endif()
+
+  if(WIN32)
+    # Vista+ (AI_ADDRCONFIG for getaddrinfo), same as configure.ac.
+    set(WINVER "0x0600")
+    set(_WIN32_WINNT "WINVER")
+  endif()
+
   check_include_file("dlfcn.h" HAVE_DLFCN_H)
   check_include_file("fcntl.h" HAVE_FCNTL_H)
   check_include_file("inttypes.h" HAVE_INTTYPES_H)
@@ -71,7 +100,7 @@ macro(xapian_detect_features)
   check_include_file_cxx("cxxabi.h" HAVE_CXXABI_H)
 
   if(WIN32)
-    set(HAVE_UUID_H 1)
+    # UuidCreate() via rpcrt4 — not the BSD <uuid.h> API (HAVE_UUID_H).
     set(USE_WIN32_UUID_API 1)
   else()
     check_include_file("uuid/uuid.h" HAVE_UUID_UUID_H)
