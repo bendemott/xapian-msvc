@@ -5,6 +5,23 @@ cmake_minimum_required(VERSION 3.20)
 set(XAPIAN_VERSION "2.1.0" CACHE STRING "Xapian release version to build/fetch")
 project(xapian VERSION ${XAPIAN_VERSION} LANGUAGES C CXX)
 
+# Parse components ourselves. constinfo.cc uses them as initializer elements,
+# and an empty XAPIAN_MINOR_VERSION is the MSVC C2059 on the comma after it.
+# PROJECT_VERSION_* is not used here: a later project() (FetchContent zlib)
+# must not be able to blank a component before version.h is written.
+string(STRIP "${XAPIAN_VERSION}" XAPIAN_VERSION)
+if(NOT XAPIAN_VERSION MATCHES "^([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$")
+  message(FATAL_ERROR
+    "XAPIAN_VERSION must look like MAJOR.MINOR[.PATCH] (got '${XAPIAN_VERSION}')")
+endif()
+set(XAPIAN_VERSION_MAJOR "${CMAKE_MATCH_1}")
+set(XAPIAN_VERSION_MINOR "${CMAKE_MATCH_2}")
+if(CMAKE_MATCH_4 STREQUAL "")
+  set(XAPIAN_VERSION_PATCH "0")
+else()
+  set(XAPIAN_VERSION_PATCH "${CMAKE_MATCH_4}")
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -158,6 +175,44 @@ if(NOT XAPIAN_ENABLE_BACKEND_HONEY)
 endif()
 if(NOT XAPIAN_ENABLE_BACKEND_INMEMORY)
   list(FILTER XAPIAN_CORE_SOURCES EXCLUDE REGEX ".*/backends/inmemory/")
+endif()
+
+# api/constinfo.cc pastes those macros straight into a brace initializer.
+# Substitute the parsed numbers so an empty macro cannot produce
+# `XAPIAN_MINOR_VERSION,` -> `,` (MSVC C2059 at that comma).
+set(_xapian_constinfo_src "${XAPIAN_SOURCE_ROOT}/api/constinfo.cc")
+set(_xapian_constinfo_gen "${CMAKE_CURRENT_BINARY_DIR}/generated/constinfo.cc")
+file(READ "${_xapian_constinfo_src}" _xapian_constinfo_text)
+string(REPLACE "\r\n" "\n" _xapian_constinfo_text "${_xapian_constinfo_text}")
+string(REPLACE "\r" "\n" _xapian_constinfo_text "${_xapian_constinfo_text}")
+set(_xapian_constinfo_from
+"    XAPIAN_MAJOR_VERSION,
+    XAPIAN_MINOR_VERSION,
+    XAPIAN_REVISION,
+    XAPIAN_VERSION,")
+set(_xapian_constinfo_to
+"    ${XAPIAN_VERSION_MAJOR},
+    ${XAPIAN_VERSION_MINOR},
+    ${XAPIAN_VERSION_PATCH},
+    \"${XAPIAN_VERSION}\",")
+string(REPLACE "${_xapian_constinfo_from}" "${_xapian_constinfo_to}"
+  _xapian_constinfo_text "${_xapian_constinfo_text}")
+if(_xapian_constinfo_text MATCHES "XAPIAN_MINOR_VERSION")
+  message(FATAL_ERROR "Failed to rewrite version initializer in api/constinfo.cc")
+endif()
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(WRITE "${_xapian_constinfo_gen}" "${_xapian_constinfo_text}")
+set(_xapian_core_sources_rewritten)
+foreach(_xapian_src IN LISTS XAPIAN_CORE_SOURCES)
+  if(_xapian_src STREQUAL "${_xapian_constinfo_src}")
+    list(APPEND _xapian_core_sources_rewritten "${_xapian_constinfo_gen}")
+  else()
+    list(APPEND _xapian_core_sources_rewritten "${_xapian_src}")
+  endif()
+endforeach()
+set(XAPIAN_CORE_SOURCES "${_xapian_core_sources_rewritten}")
+if(NOT _xapian_constinfo_gen IN_LIST XAPIAN_CORE_SOURCES)
+  message(FATAL_ERROR "constinfo.cc was not swapped into the xapian sources")
 endif()
 
 add_library(xapian ${XAPIAN_CORE_SOURCES})
