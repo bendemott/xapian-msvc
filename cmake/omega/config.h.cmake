@@ -27,6 +27,8 @@
 #cmakedefine HAVE_GMTIME_R 1
 #cmakedefine HAVE_LOCALTIME_R 1
 #cmakedefine HAVE_CLOSEFROM 1
+#cmakedefine HAVE_SIGACTION 1
+#cmakedefine HAVE_WAITPID 1
 #cmakedefine HAVE_SOCKETPAIR 1
 #cmakedefine HAVE_SYS_WAIT_H 1
 #cmakedefine HAVE_SYS_SELECT_H 1

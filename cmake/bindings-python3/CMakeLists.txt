@@ -51,6 +51,12 @@ target_include_directories(xapian_python3 PRIVATE
   ${Python3_INCLUDE_DIRS}
 )
 target_link_libraries(xapian_python3 PRIVATE Xapian::xapian Python3::Module)
+# Core config.h includes <zlib.h> before redefining off_t. That include path
+# is private to the xapian target, so the wrap needs zlib's own usage
+# requirements (and the static library, when xapian itself is static).
+if(DEFINED XAPIAN_ZLIB_TARGET AND TARGET "${XAPIAN_ZLIB_TARGET}")
+  target_link_libraries(xapian_python3 PRIVATE "${XAPIAN_ZLIB_TARGET}")
+endif()
 if(MSVC)
   target_compile_options(xapian_python3 PRIVATE /bigobj /EHsc /wd4003 /wd4267 /wd4244 /wd4996)
 endif()

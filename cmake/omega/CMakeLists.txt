@@ -69,11 +69,21 @@ else()
   set(HAVE_SLEEP 1)
   set(HAVE_STRPTIME 1)
   set(HAVE_SYSCONF 1)
-  set(HAVE_CLOSEFROM 1)
   set(HAVE_SOCKETPAIR 1)
+  # sigaction avoids glibc-only sighandler_t. waitpid selects the Unix branch
+  # in worker.cc (the #else is the "needs porting" error).
+  set(HAVE_SIGACTION 1)
+  set(HAVE_WAITPID 1)
   set(HAVE_SYS_WAIT_H 1)
   set(HAVE_SYS_SELECT_H 1)
   set(HAVE_DIRENT_H 1)
+endif()
+
+# Linux glibc has closefrom(); macOS does not. The bundled common/closefrom.cc
+# supplies it only when this is unset.
+if(NOT WIN32)
+  include(CheckFunctionExists)
+  check_function_exists(closefrom HAVE_CLOSEFROM)
 endif()
 
 set(OMEGA_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
