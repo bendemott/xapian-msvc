@@ -1,26 +1,53 @@
 cmake_minimum_required(VERSION 3.20)
 
-# Allow CI/release builds to target a different upstream version without editing
-# this file: cmake -DXAPIAN_VERSION=2.1.0 ...
-set(XAPIAN_VERSION "2.1.0" CACHE STRING "Xapian release version to build/fetch")
-project(xapian VERSION ${XAPIAN_VERSION} LANGUAGES C CXX)
+# Fetch version when third_party/xapian-core is not imported yet. The version
+# that is compiled comes from upstream configure.ac (AC_INIT), not this cache
+# entry. Windows PowerShell splits an unquoted -DXAPIAN_VERSION=2.1.0 into
+# -DXAPIAN_VERSION=2, so the cache value is not a safe source of truth.
+set(XAPIAN_VERSION "2.1.0" CACHE STRING
+  "Xapian release to fetch when upstream sources are not already present")
+set(XAPIAN_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-core" CACHE PATH
+  "Path to xapian-core sources")
+
+function(xapian_read_upstream_version configure_ac out_var)
+  file(READ "${configure_ac}" _text)
+  if(NOT _text MATCHES "AC_INIT\\(\\[xapian-core\\],[ \t]*\\[([0-9]+\\.[0-9]+(\\.[0-9]+)?)\\]")
+    message(FATAL_ERROR "Could not read AC_INIT version from ${configure_ac}")
+  endif()
+  set(${out_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+endfunction()
 
 # Parse components ourselves. constinfo.cc uses them as initializer elements,
 # and an empty XAPIAN_MINOR_VERSION is the MSVC C2059 on the comma after it.
-# PROJECT_VERSION_* is not used here: a later project() (FetchContent zlib)
-# must not be able to blank a component before version.h is written.
-string(STRIP "${XAPIAN_VERSION}" XAPIAN_VERSION)
-if(NOT XAPIAN_VERSION MATCHES "^([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$")
-  message(FATAL_ERROR
-    "XAPIAN_VERSION must look like MAJOR.MINOR[.PATCH] (got '${XAPIAN_VERSION}')")
-endif()
-set(XAPIAN_VERSION_MAJOR "${CMAKE_MATCH_1}")
-set(XAPIAN_VERSION_MINOR "${CMAKE_MATCH_2}")
-if(CMAKE_MATCH_4 STREQUAL "")
-  set(XAPIAN_VERSION_PATCH "0")
+function(xapian_parse_version version_string)
+  string(STRIP "${version_string}" version_string)
+  if(NOT version_string MATCHES "^([0-9]+)\\.([0-9]+)(\\.([0-9]+))?$")
+    message(FATAL_ERROR
+      "Xapian version must look like MAJOR.MINOR[.PATCH] (got '${version_string}')")
+  endif()
+  set(XAPIAN_VERSION "${version_string}" PARENT_SCOPE)
+  set(XAPIAN_VERSION_MAJOR "${CMAKE_MATCH_1}" PARENT_SCOPE)
+  set(XAPIAN_VERSION_MINOR "${CMAKE_MATCH_2}" PARENT_SCOPE)
+  if(CMAKE_MATCH_4 STREQUAL "")
+    set(XAPIAN_VERSION_PATCH "0" PARENT_SCOPE)
+  else()
+    set(XAPIAN_VERSION_PATCH "${CMAKE_MATCH_4}" PARENT_SCOPE)
+  endif()
+endfunction()
+
+set(_xapian_configure_ac "${XAPIAN_SOURCE_ROOT}/configure.ac")
+if(EXISTS "${_xapian_configure_ac}")
+  xapian_read_upstream_version("${_xapian_configure_ac}" _xapian_version_text)
+  if(NOT XAPIAN_VERSION STREQUAL "${_xapian_version_text}")
+    message(STATUS
+      "Using Xapian ${_xapian_version_text} from ${_xapian_configure_ac} (XAPIAN_VERSION='${XAPIAN_VERSION}')")
+  endif()
 else()
-  set(XAPIAN_VERSION_PATCH "${CMAKE_MATCH_4}")
+  set(_xapian_version_text "${XAPIAN_VERSION}")
 endif()
+
+project(xapian VERSION ${_xapian_version_text} LANGUAGES C CXX)
+xapian_parse_version("${_xapian_version_text}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,9 +68,6 @@ option(XAPIAN_BUILD_PYTHON3 "Build Python 3 bindings" OFF)
 option(XAPIAN_USE_VISIBILITY "Use ELF visibility attributes (GCC/Clang)" ON)
 
 # Prefer a local import; otherwise FetchContent the official release tarball.
-set(XAPIAN_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-core" CACHE PATH
-    "Path to xapian-core sources")
-
 if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/include/xapian.h")
   include(FetchContent)
   set(XAPIAN_FETCH_VERSION "${PROJECT_VERSION}")
@@ -61,8 +85,13 @@ if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/include/xapian.h")
 endif()
 
 if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/include/xapian.h")
-  message(FATAL_ERROR "xapian-core sources not found. Run ./scripts/import-xapian-core.sh ${PROJECT_VERSION}")
+  message(FATAL_ERROR "xapian-core sources not found. Run ./scripts/import-xapian-core.sh ${XAPIAN_VERSION}")
 endif()
+
+# The tree we compile is the version of record, including a just-fetched tarball.
+xapian_read_upstream_version("${XAPIAN_SOURCE_ROOT}/configure.ac" _xapian_version_text)
+xapian_parse_version("${_xapian_version_text}")
+message(STATUS "Xapian version ${XAPIAN_VERSION}")
 
 find_package(ZLIB)
 if(NOT ZLIB_FOUND)

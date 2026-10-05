@@ -56,17 +56,18 @@ jobs:
         run: python scripts/import-xapian.py --version "${{ steps.ver.outputs.version }}"
 
       - name: Configure (MSVC)
-        run: >
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-          -DXAPIAN_VERSION=${{ steps.ver.outputs.version }}
-          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/prefix
-          -DBUILD_SHARED_LIBS=OFF
-          -DXAPIAN_BUILD_TOOLS=ON
-          -DXAPIAN_BUILD_LETOR=ON
-          -DXAPIAN_BUILD_OMEGA=OFF
-          -DXAPIAN_BUILD_PYTHON3=OFF
-          -DXAPIAN_BUILD_SMOKE_TEST=ON
-          -DXAPIAN_BUILD_TESTS=OFF
+        shell: powershell
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            "-DXAPIAN_VERSION=${{ steps.ver.outputs.version }}" `
+            "-DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/prefix" `
+            "-DBUILD_SHARED_LIBS=OFF" `
+            "-DXAPIAN_BUILD_TOOLS=ON" `
+            "-DXAPIAN_BUILD_LETOR=ON" `
+            "-DXAPIAN_BUILD_OMEGA=OFF" `
+            "-DXAPIAN_BUILD_PYTHON3=OFF" `
+            "-DXAPIAN_BUILD_SMOKE_TEST=ON" `
+            "-DXAPIAN_BUILD_TESTS=OFF"
 
       - name: Build
         run: cmake --build build --config Release -j 2
