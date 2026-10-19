@@ -67,6 +67,15 @@ option(XAPIAN_BUILD_LETOR "Build xapian-letor (learning to rank)" ON)
 option(XAPIAN_BUILD_PYTHON3 "Build Python 3 bindings" OFF)
 option(XAPIAN_USE_VISIBILITY "Use ELF visibility attributes (GCC/Clang)" ON)
 
+# Compile everything as position-independent code. The Python module is a
+# shared object that links the static libxapian.a (and zlibstatic when zlib is
+# fetched); on Linux that link fails with "recompile with -fPIC" otherwise.
+# It also lets consumers link the static library into their own shared
+# libraries. Set before any targets so fetched dependencies inherit it.
+if(NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # Prefer a local import; otherwise FetchContent the official release tarball.
 if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/include/xapian.h")
   include(FetchContent)
