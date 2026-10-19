@@ -32,12 +32,19 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/config.h"
   @ONLY)
 
+# Package layout: build/python3/xapian/{__init__.py,_xapian.*}
+set(PY_PKG_DIR "${CMAKE_BINARY_DIR}/python3/xapian")
+
 add_library(xapian_python3 MODULE "${PY3_SRC}/xapian_wrap.cc")
+# Multi-config generators (Visual Studio) append a per-config subdirectory to
+# plain output directories, which would put _xapian.pyd in xapian/Release/
+# where `from . import _xapian` can't see it. A generator expression in the
+# path turns that off, so the module sits next to __init__.py in every config.
 set_target_properties(xapian_python3 PROPERTIES
   OUTPUT_NAME "_xapian"
   PREFIX ""
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python3/xapian"
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python3/xapian"
+  LIBRARY_OUTPUT_DIRECTORY "$<1:${PY_PKG_DIR}>"
+  RUNTIME_OUTPUT_DIRECTORY "$<1:${PY_PKG_DIR}>"
 )
 if(WIN32)
   set_target_properties(xapian_python3 PROPERTIES SUFFIX ".pyd")
@@ -61,8 +68,6 @@ if(MSVC)
   target_compile_options(xapian_python3 PRIVATE /bigobj /EHsc /wd4003 /wd4267 /wd4244 /wd4996)
 endif()
 
-# Package layout: build/python3/xapian/{__init__.py,_xapian.*}
-set(PY_PKG_DIR "${CMAKE_BINARY_DIR}/python3/xapian")
 file(MAKE_DIRECTORY "${PY_PKG_DIR}")
 add_custom_command(TARGET xapian_python3 POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
