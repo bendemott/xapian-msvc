@@ -1,7 +1,7 @@
 # Python 3 bindings for Xapian (pre-generated SWIG wrap from the release tarball).
 # Expects Xapian::xapian from the parent project.
 
-set(BINDINGS_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-bindings" CACHE PATH
+set(BINDINGS_ROOT "${PROJECT_SOURCE_DIR}/third_party/xapian-bindings" CACHE PATH
     "Path to xapian-bindings sources")
 
 if(NOT EXISTS "${BINDINGS_ROOT}/python3/xapian_wrap.cc")
@@ -25,7 +25,7 @@ endif()
 find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 
 # Shadow config.h ahead of the core one so MSVC + Python.h can coexist.
-set(XAPIAN_CORE_CONFIG_H "${CMAKE_BINARY_DIR}/config.h")
+set(XAPIAN_CORE_CONFIG_H "${PROJECT_BINARY_DIR}/config.h")
 file(TO_CMAKE_PATH "${XAPIAN_CORE_CONFIG_H}" XAPIAN_CORE_CONFIG_H)
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/config.h.in"
@@ -33,7 +33,7 @@ configure_file(
   @ONLY)
 
 # Package layout: build/python3/xapian/{__init__.py,_xapian.*}
-set(PY_PKG_DIR "${CMAKE_BINARY_DIR}/python3/xapian")
+set(PY_PKG_DIR "${PROJECT_BINARY_DIR}/python3/xapian")
 
 add_library(xapian_python3 MODULE "${PY3_SRC}/xapian_wrap.cc")
 # Multi-config generators (Visual Studio) append a per-config subdirectory to
@@ -78,9 +78,9 @@ add_custom_command(TARGET xapian_python3 POST_BUILD
 enable_testing()
 add_test(
   NAME python3-smoke
-  COMMAND ${Python3_EXECUTABLE} -c "import sys; sys.path.insert(0, r'${CMAKE_BINARY_DIR}/python3'); import xapian; print(xapian.version_string())"
+  COMMAND ${Python3_EXECUTABLE} -c "import sys; sys.path.insert(0, r'${PROJECT_BINARY_DIR}/python3'); import xapian; print(xapian.version_string())"
 )
-set_tests_properties(python3-smoke PROPERTIES ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}/python3")
+set_tests_properties(python3-smoke PROPERTIES ENVIRONMENT "PYTHONPATH=${PROJECT_BINARY_DIR}/python3")
 
 install(TARGETS xapian_python3 DESTINATION "${Python3_SITEARCH}/xapian")
 install(FILES "${PY3_SRC}/xapian__init__.py" DESTINATION "${Python3_SITEARCH}/xapian" RENAME __init__.py)

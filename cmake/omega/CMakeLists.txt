@@ -1,7 +1,7 @@
 # CMake build for xapian-omega (core tools; optional format handlers off).
 # Expects Xapian::xapian, XAPIAN_ZLIB_TARGET, and PROJECT_VERSION from the parent.
 
-set(OMEGA_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-omega" CACHE PATH
+set(OMEGA_ROOT "${PROJECT_SOURCE_DIR}/third_party/xapian-omega" CACHE PATH
     "Path to xapian-omega sources")
 
 if(NOT EXISTS "${OMEGA_ROOT}/omindex.cc")
@@ -88,7 +88,7 @@ endif()
 
 set(OMEGA_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
 configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/omega/config.h.cmake"
+  "${PROJECT_SOURCE_DIR}/cmake/omega/config.h.cmake"
   "${OMEGA_BINARY_DIR}/config.h"
   @ONLY)
 
@@ -113,7 +113,7 @@ if(NOT TARGET PCRE2::8BIT AND NOT TARGET PkgConfig::PCRE2)
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
   )
   # Quiet pcre2's cmake_minimum_required(<3.10) deprecation on CMake 4+.
-  set(_pcre2_cmake_txt "${CMAKE_BINARY_DIR}/_deps/pcre2-src/CMakeLists.txt")
+  set(_pcre2_cmake_txt "${PROJECT_BINARY_DIR}/_deps/pcre2-src/CMakeLists.txt")
   if(EXISTS "${_pcre2_cmake_txt}")
     file(READ "${_pcre2_cmake_txt}" _pcre2_cmake)
     string(REGEX REPLACE
@@ -163,11 +163,11 @@ else()
     set(HAVE_LIBMAGIC 1)
     file(MAKE_DIRECTORY "${OMEGA_BINARY_DIR}/magic_include")
     configure_file(
-      "${CMAKE_SOURCE_DIR}/cmake/omega/magic_stub.h"
+      "${PROJECT_SOURCE_DIR}/cmake/omega/magic_stub.h"
       "${OMEGA_BINARY_DIR}/magic_include/magic.h"
       COPYONLY)
     set(OMEGA_MAGIC_INCLUDES "${OMEGA_BINARY_DIR}/magic_include")
-    set(OMEGA_MAGIC_STUB_SRC "${CMAKE_SOURCE_DIR}/cmake/omega/magic_stub.c")
+    set(OMEGA_MAGIC_STUB_SRC "${PROJECT_SOURCE_DIR}/cmake/omega/magic_stub.c")
   else()
     message(FATAL_ERROR "libmagic required for omindex (install libmagic-dev)")
   endif()
@@ -175,7 +175,7 @@ endif()
 
 # Re-configure config.h now that HAVE_LIBMAGIC is known
 configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/omega/config.h.cmake"
+  "${PROJECT_SOURCE_DIR}/cmake/omega/config.h.cmake"
   "${OMEGA_BINARY_DIR}/config.h"
   @ONLY)
 

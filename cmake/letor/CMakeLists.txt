@@ -1,7 +1,7 @@
 # xapian-letor (Learning to Rank) — CMake build for MSVC / Ninja.
 # Sources come from the xapian git monorepo (not a separate release tarball).
 
-set(LETOR_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-letor" CACHE PATH
+set(LETOR_ROOT "${PROJECT_SOURCE_DIR}/third_party/xapian-letor" CACHE PATH
     "Path to xapian-letor sources")
 
 if(NOT EXISTS "${LETOR_ROOT}/include/xapian-letor.h")
@@ -35,7 +35,7 @@ file(MAKE_DIRECTORY "${LETOR_GEN_INCLUDE}/xapian-letor")
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 execute_process(
   COMMAND ${Python3_EXECUTABLE}
-    "${CMAKE_SOURCE_DIR}/scripts/generate-letor-exceptions.py"
+    "${PROJECT_SOURCE_DIR}/scripts/generate-letor-exceptions.py"
     --outdir "${LETOR_GEN_INCLUDE}/xapian-letor"
   RESULT_VARIABLE _letor_gen_rc
 )
@@ -97,7 +97,7 @@ else()
 endif()
 
 if(XAPIAN_BUILD_SMOKE_TEST)
-  add_executable(xapian-letor-smoke "${CMAKE_SOURCE_DIR}/examples/letor_smoke.cpp")
+  add_executable(xapian-letor-smoke "${PROJECT_SOURCE_DIR}/examples/letor_smoke.cpp")
   target_link_libraries(xapian-letor-smoke PRIVATE Xapian::letor)
   enable_testing()
   add_test(NAME letor-smoke COMMAND xapian-letor-smoke)

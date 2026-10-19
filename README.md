@@ -82,6 +82,7 @@ the upstream tarball (Perl, Ruby, Java, …) are not wired yet — Python is fir
 | `XAPIAN_BUILD_OMEGA` | ON | Omega programs |
 | `XAPIAN_BUILD_LETOR` | ON | Learning-to-Rank library |
 | `XAPIAN_BUILD_PYTHON3` | OFF | Python 3 bindings |
+| `XAPIAN_SKIP_INSTALL` | OFF | No install rules (when added with `add_subdirectory` / FetchContent) |
 
 ## Status
 
@@ -114,6 +115,24 @@ To publish the current tree as 2.1.0 once:
 ```text
 Actions → release → Run workflow → version=2.1.0
 ```
+
+## As a subproject (FetchContent)
+
+```cmake
+include(FetchContent)
+set(XAPIAN_BUILD_TOOLS OFF)
+set(XAPIAN_BUILD_OMEGA OFF)
+set(XAPIAN_BUILD_LETOR OFF)
+set(XAPIAN_BUILD_SMOKE_TEST OFF)
+set(XAPIAN_SKIP_INSTALL ON)
+FetchContent_Declare(xapian_msvc
+  URL https://github.com/bendemott/xapian-msvc/archive/<commit>.tar.gz)
+FetchContent_MakeAvailable(xapian_msvc)
+target_link_libraries(myapp PRIVATE Xapian::xapian)
+```
+
+The project only uses its own folders (`CMAKE_CURRENT_SOURCE_DIR` /
+`PROJECT_SOURCE_DIR`), so it works inside another build.
 
 ## vcpkg
 

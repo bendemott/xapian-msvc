@@ -8,7 +8,7 @@ if(NOT TARGET xapian_getopt)
   add_library(xapian_getopt STATIC "${TESTS_COMMON}/getopt.cc")
   target_include_directories(xapian_getopt PUBLIC
     "${TESTS_COMMON}"
-    "${CMAKE_BINARY_DIR}"
+    "${PROJECT_BINARY_DIR}"
   )
   target_compile_definitions(xapian_getopt PRIVATE HAVE_CONFIG_H)
   if(DEFINED XAPIAN_ZLIB_TARGET)
@@ -64,8 +64,8 @@ target_include_directories(xapian_testharness PUBLIC
   "${TESTS_COMMON}"
   "${XAPIAN_SOURCE_ROOT}"
   "${XAPIAN_SOURCE_ROOT}/include"
-  "${CMAKE_BINARY_DIR}"
-  "${CMAKE_BINARY_DIR}/include"
+  "${PROJECT_BINARY_DIR}"
+  "${PROJECT_BINARY_DIR}/include"
 )
 target_compile_definitions(xapian_testharness PUBLIC HAVE_CONFIG_H)
 target_link_libraries(xapian_testharness PUBLIC Xapian::xapian xapian_getopt)
@@ -145,8 +145,8 @@ target_include_directories(unittest PRIVATE
   "${TESTS_COMMON}"
   "${XAPIAN_SOURCE_ROOT}"
   "${XAPIAN_SOURCE_ROOT}/include"
-  "${CMAKE_BINARY_DIR}"
-  "${CMAKE_BINARY_DIR}/include"
+  "${PROJECT_BINARY_DIR}"
+  "${PROJECT_BINARY_DIR}/include"
 )
 target_compile_definitions(unittest PRIVATE HAVE_CONFIG_H NO_LIBXAPIAN)
 target_link_libraries(unittest PRIVATE xapian_getopt ${XAPIAN_ZLIB_TARGET})

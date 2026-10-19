@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.20)
 # -DXAPIAN_VERSION=2, so the cache value is not a safe source of truth.
 set(XAPIAN_VERSION "2.1.0" CACHE STRING
   "Xapian release to fetch when upstream sources are not already present")
-set(XAPIAN_SOURCE_ROOT "${CMAKE_SOURCE_DIR}/third_party/xapian-core" CACHE PATH
+set(XAPIAN_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/xapian-core" CACHE PATH
   "Path to xapian-core sources")
 
 function(xapian_read_upstream_version configure_ac out_var)
@@ -66,6 +66,7 @@ option(XAPIAN_BUILD_OMEGA "Build xapian-omega (omindex, scriptindex, omega CGI)"
 option(XAPIAN_BUILD_LETOR "Build xapian-letor (learning to rank)" ON)
 option(XAPIAN_BUILD_PYTHON3 "Build Python 3 bindings" OFF)
 option(XAPIAN_USE_VISIBILITY "Use ELF visibility attributes (GCC/Clang)" ON)
+option(XAPIAN_SKIP_INSTALL "No install rules (for add_subdirectory / FetchContent use)" OFF)
 
 # Compile everything as position-independent code. The Python module is a
 # shared object that links the static libxapian.a (and zlibstatic when zlib is
@@ -122,11 +123,11 @@ if(NOT ZLIB_FOUND)
   if(TARGET zlib)
     # If anything still builds the DLL, drop it next to our binaries.
     set_target_properties(zlib PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}"
-      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}"
-      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}"
-      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}")
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_CURRENT_BINARY_DIR}"
+      RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_CURRENT_BINARY_DIR}")
   endif()
   if(TARGET zlibstatic)
     set(XAPIAN_ZLIB_TARGET zlibstatic)
@@ -145,7 +146,7 @@ if(XAPIAN_USE_ICU)
   find_package(ICU REQUIRED COMPONENTS uc i18n)
 endif()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(XapianFeatureChecks)
 xapian_detect_features()
 
@@ -175,18 +176,18 @@ else()
 endif()
 
 configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/config.h.cmake"
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.h.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/config.h"
   @ONLY)
 
 configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/version.h.in"
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.h.in"
   "${CMAKE_CURRENT_BINARY_DIR}/include/xapian/version.h"
   @ONLY)
 
 # Override visibility.h for DLL-friendly MSVC builds.
 configure_file(
-  "${CMAKE_SOURCE_DIR}/cmake/visibility.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/visibility.h"
   "${CMAKE_CURRENT_BINARY_DIR}/include/xapian/visibility.h"
   COPYONLY)
 
@@ -352,6 +353,7 @@ if(XAPIAN_BUILD_TESTS)
   add_subdirectory(cmake/tests)
 endif()
 
+if(NOT XAPIAN_SKIP_INSTALL)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
@@ -433,3 +435,5 @@ set(ZLIB_LIBRARY \"\${_xapian_zlib_loc}\" CACHE FILEPATH \"\")
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/ZLIB"
     RENAME ZLIBConfig.cmake)
 endif()
+
+endif() # NOT XAPIAN_SKIP_INSTALL

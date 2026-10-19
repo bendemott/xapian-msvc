@@ -3,7 +3,7 @@
 add_library(xapian_getopt STATIC "${XAPIAN_SOURCE_ROOT}/common/getopt.cc")
 target_include_directories(xapian_getopt PUBLIC
   "${XAPIAN_SOURCE_ROOT}/common"
-  "${CMAKE_BINARY_DIR}"
+  "${PROJECT_BINARY_DIR}"
 )
 # config.h (MSVC) includes zlib.h before redefining off_t.
 if(TARGET zlibstatic)
@@ -22,11 +22,11 @@ function(xapian_add_tool name)
   endif()
   add_executable(${name} ${T_SOURCES})
   target_include_directories(${name} PRIVATE
-    "${CMAKE_BINARY_DIR}"
+    "${PROJECT_BINARY_DIR}"
     "${XAPIAN_SOURCE_ROOT}"
     "${XAPIAN_SOURCE_ROOT}/common"
     "${XAPIAN_SOURCE_ROOT}/include"
-    "${CMAKE_BINARY_DIR}/include"
+    "${PROJECT_BINARY_DIR}/include"
   )
   target_compile_definitions(${name} PRIVATE HAVE_CONFIG_H)
   target_link_libraries(${name} PRIVATE Xapian::xapian xapian_getopt ${T_EXTRA_LIBS})
