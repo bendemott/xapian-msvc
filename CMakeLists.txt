@@ -174,10 +174,6 @@ else()
   unset(XAPIAN_ENABLE_VISIBILITY)
 endif()
 
-if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(XAPIAN_CMAKE_LIBRARY_DEBUG 1)
-endif()
-
 configure_file(
   "${CMAKE_SOURCE_DIR}/cmake/config.h.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/config.h"

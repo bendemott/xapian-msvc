@@ -29,7 +29,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve version
         id: ver
@@ -47,7 +47,7 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "Building Xapian $V"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -97,14 +97,14 @@ jobs:
           echo "asset=${NAME}.zip" >> "$GITHUB_OUTPUT"
           ls -la "${{ github.workspace }}/${NAME}.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v3
         with:
           name: xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64
           path: ${{ github.workspace }}/xapian-msvc-${{ steps.ver.outputs.version }}-windows-x64.zip
 
       - name: Publish GitHub Release
         if: ${{ github.event_name == 'push' || inputs.create_release }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.ver.outputs.version }}
           name: Xapian ${{ steps.ver.outputs.version }} (MSVC Windows x64)

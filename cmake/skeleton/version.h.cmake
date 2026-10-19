@@ -11,18 +11,10 @@
 # error Never use <xapian/version.h> directly; include <xapian.h> instead.
 #endif
 
-#ifdef _MSC_VER
-/* Applications must use the same _DEBUG setting as the library build. */
-# ifdef XAPIAN_CMAKE_LIBRARY_DEBUG
-#  ifndef _DEBUG
-#   error This library was compiled with _DEBUG defined; settings must match.
-#  endif
-# else
-#  ifdef _DEBUG
-#   error You defined _DEBUG but the library was not built that way.
-#  endif
-# endif
-#endif
+/* No _DEBUG guard here: a multi-config or vcpkg build installs one copy of
+ * this header for both Debug and Release libraries. MSVC already rejects a
+ * debug/release CRT mix at link time (_ITERATOR_DEBUG_LEVEL / RuntimeLibrary
+ * mismatch), so a header check adds nothing and breaks those builds. */
 
 #define XAPIAN_VERSION @STRING_VERSION@
 #define XAPIAN_MAJOR_VERSION @MAJOR_VERSION@
