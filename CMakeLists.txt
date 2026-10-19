@@ -185,26 +185,30 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/include/xapian/visibility.h"
   COPYONLY)
 
-include("${CMAKE_SOURCE_DIR}/cmake/xapian_core_sources.cmake")
+# The library's file list changes between releases, so take it from upstream's
+# own Makefile.am / */Makefile.mk (lib_src) for the tree being built. The
+# backend options select the same automake conditionals configure would.
+include(XapianCoreSources)
+xapian_core_sources_from_automake("${XAPIAN_SOURCE_ROOT}" _xapian_core_relative_sources)
 set(XAPIAN_CORE_SOURCES)
-foreach(rel ${XAPIAN_CORE_RELATIVE_SOURCES})
+set(_xapian_core_missing)
+foreach(rel IN LISTS _xapian_core_relative_sources)
   list(APPEND XAPIAN_CORE_SOURCES "${XAPIAN_SOURCE_ROOT}/${rel}")
+  if(NOT EXISTS "${XAPIAN_SOURCE_ROOT}/${rel}")
+    list(APPEND _xapian_core_missing "${rel}")
+  endif()
 endforeach()
-
-# Remote-related sources are already in the extracted list for the default
-# all-backends configuration. If remote is disabled, strip remote files.
-if(NOT XAPIAN_ENABLE_BACKEND_REMOTE)
-  list(FILTER XAPIAN_CORE_SOURCES EXCLUDE REGEX ".*/(net/|backends/remote/|dbfactory_remote\\.cc|replication\\.cc|databasereplicator\\.cc|glass_databasereplicator\\.cc|socket_utils\\.cc|replicate_utils\\.cc)")
+if(_xapian_core_missing)
+  list(JOIN _xapian_core_missing "\n  " _xapian_core_missing_text)
+  message(FATAL_ERROR
+    "xapian-core ${XAPIAN_VERSION} at ${XAPIAN_SOURCE_ROOT} is missing sources "
+    "listed in its Makefiles:\n  ${_xapian_core_missing_text}\n"
+    "Generated files (stemmers, queryparser_internal.cc, unicode-data.cc) only "
+    "ship in release tarballs; import with scripts/import-xapian.py rather than "
+    "using a git checkout.")
 endif()
-if(NOT XAPIAN_ENABLE_BACKEND_GLASS)
-  list(FILTER XAPIAN_CORE_SOURCES EXCLUDE REGEX ".*/backends/glass/")
-endif()
-if(NOT XAPIAN_ENABLE_BACKEND_HONEY)
-  list(FILTER XAPIAN_CORE_SOURCES EXCLUDE REGEX ".*/backends/honey/")
-endif()
-if(NOT XAPIAN_ENABLE_BACKEND_INMEMORY)
-  list(FILTER XAPIAN_CORE_SOURCES EXCLUDE REGEX ".*/backends/inmemory/")
-endif()
+list(LENGTH XAPIAN_CORE_SOURCES _xapian_core_count)
+message(STATUS "xapian-core: ${_xapian_core_count} library sources from upstream Makefiles")
 
 # api/constinfo.cc pastes those macros straight into a brace initializer.
 # Substitute the parsed numbers so an empty macro cannot produce
